@@ -16,6 +16,7 @@ import base64
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 warnings.filterwarnings('ignore')
+excel_pattern = "利润模型评估报告_原始收益值_*.xlsx"
 
 # 设置页面配置
 st.set_page_config(
