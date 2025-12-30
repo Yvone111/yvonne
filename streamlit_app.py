@@ -65,7 +65,6 @@ class NutritionAdviserDashboard:
             self.data_folder = data_folder
 
         self.monthly_data = {}
-        self.uploaded_data = {}  # 新增：存储上传文件的数据
         self.load_monthly_data()
 
     def load_monthly_data(self):
@@ -73,7 +72,7 @@ class NutritionAdviserDashboard:
         # 检查文件夹是否存在
         if not os.path.exists(self.data_folder):
             st.sidebar.error(f"数据文件夹不存在: {self.data_folder}")
-            st.sidebar.info("请使用上传功能添加Excel文件")
+            st.sidebar.info("请上传Excel文件进行分析")
             return
 
         # 查找所有符合命名模式的Excel文件
@@ -85,7 +84,7 @@ class NutritionAdviserDashboard:
             st.sidebar.info("请确保文件命名格式为: 利润模型评估报告_原始收益值_YYYYMM.xlsx")
             return
 
-        st.sidebar.info(f"找到 {len(excel_files)} 个本地Excel文件")
+        st.sidebar.info(f"找到 {len(excel_files)} 个Excel文件")
 
         for file_path in excel_files:
             try:
@@ -107,17 +106,15 @@ class NutritionAdviserDashboard:
                         # 添加月份标识列
                         df['月份'] = month_key
                         df['日期'] = file_date
-                        df['数据来源'] = '本地文件'  # 标记数据来源
 
                         # 存储数据
                         self.monthly_data[month_key] = {
                             'data': df,
                             'date': file_date,
-                            'file_path': file_path,
-                            'source': 'local'
+                            'file_path': file_path
                         }
 
-                        st.sidebar.success(f"已加载本地文件: {month_key}")
+                        st.sidebar.success(f"已加载: {month_key}")
 
                     except ValueError as e:
                         st.sidebar.warning(f"文件名日期格式不正确 {filename}: {str(e)}")
@@ -125,84 +122,17 @@ class NutritionAdviserDashboard:
             except Exception as e:
                 st.sidebar.error(f"加载文件失败 {file_path}: {str(e)}")
 
-    def load_uploaded_files(self, uploaded_files):
-        """处理上传的文件 - 新增方法"""
-        if not uploaded_files:
-            return
-
-        for uploaded_file in uploaded_files:
-            try:
-                # 从文件名提取月份信息
-                filename = uploaded_file.name
-                month_key = self.extract_month_from_filename(filename)
-                
-                # 读取Excel文件
-                df = pd.read_excel(uploaded_file)
-                
-                # 添加月份标识列
-                df['月份'] = month_key
-                df['日期'] = datetime.now()
-                df['数据来源'] = '上传文件'  # 标记数据来源
-                
-                # 存储到上传数据字典
-                self.uploaded_data[month_key] = {
-                    'data': df,
-                    'date': datetime.now(),
-                    'file_path': f"上传文件: {filename}",
-                    'source': 'uploaded'
-                }
-                
-                st.sidebar.success(f"✅ 已加载上传文件: {month_key} (共{len(df)}条记录)")
-                
-            except Exception as e:
-                st.sidebar.error(f"❌ 处理上传文件 {uploaded_file.name} 时出错: {str(e)}")
-
-    def extract_month_from_filename(self, filename):
-        """从文件名提取月份信息"""
-        # 支持多种文件名格式
-        if "利润模型评估报告_原始收益值_" in filename:
-            date_str = filename.replace("利润模型评估报告_原始收益值_", "").replace(".xlsx", "")
-        elif "利润模型评估报告_" in filename:
-            date_str = filename.replace("利润模型评估报告_", "").replace(".xlsx", "")
-        else:
-            # 如果无法解析，使用文件名（不含扩展名）
-            date_str = filename.replace(".xlsx", "")
-        
-        # 尝试解析日期
-        try:
-            if len(date_str) == 6 and date_str.isdigit():
-                file_date = datetime.strptime(date_str, "%Y%m")
-                return file_date.strftime("%Y年%m月")
-        except ValueError:
-            pass
-            
-        return filename.replace(".xlsx", "")
-
-    def get_all_data(self):
-        """获取所有数据（本地+上传）"""
-        all_data = {}
-        all_data.update(self.monthly_data)  # 本地数据
-        all_data.update(self.uploaded_data)  # 上传数据
-        return all_data
-
     def get_available_months(self):
-        """获取可用的月份列表（包括本地和上传的）"""
-        all_data = self.get_all_data()
-        if not all_data:
+        """获取可用的月份列表"""
+        if not self.monthly_data:
             return []
-        return sorted(all_data.keys(),
-                      key=lambda x: all_data[x]['date'],
+        return sorted(self.monthly_data.keys(),
+                      key=lambda x: self.monthly_data[x]['date'],
                       reverse=True)
 
     def get_month_data(self, month):
-        """获取指定月份的数据（优先使用上传的数据）"""
-        # 优先检查上传的数据
-        if month in self.uploaded_data:
-            return self.uploaded_data[month]['data']
-        elif month in self.monthly_data:
-            return self.monthly_data[month]['data']
-        else:
-            return pd.DataFrame()
+        """获取指定月份的数据"""
+        return self.monthly_data.get(month, {}).get('data', pd.DataFrame())
 
     def get_previous_month(self, current_month):
         """获取上一个月份的数据"""
@@ -215,7 +145,6 @@ class NutritionAdviserDashboard:
             return months[current_index + 1]  # 因为是倒序排列
         return None
 
-    # 保留您原有的所有方法不变
     def create_overview_dashboard(self, selected_month):
         """创建概览仪表板"""
         st.header(f"📊 营养顾问绩效评估概览 - {selected_month}")
@@ -224,10 +153,6 @@ class NutritionAdviserDashboard:
         if df.empty:
             st.warning(f"没有找到 {selected_month} 的数据")
             return
-
-        # 显示数据来源
-        data_source = "上传文件" if selected_month in self.uploaded_data else "本地文件"
-        st.caption(f"数据来源: {data_source}")
 
         # 关键指标卡片
         col1, col2, col3, col4 = st.columns(4)
@@ -270,12 +195,11 @@ class NutritionAdviserDashboard:
             self.create_region_analysis_chart(df, selected_month)
 
         with col2:
-            if len(self.get_all_data()) > 1:
+            if len(self.monthly_data) > 1:
                 self.create_trend_analysis_chart(selected_month)
             else:
                 st.info("需要多个月份数据才能显示趋势分析")
 
-    # 保留您原有的所有图表方法不变
     def create_profit_distribution_chart(self, df, month):
         """创建收益分布图表"""
         st.subheader("📈 收益分布情况")
@@ -376,6 +300,7 @@ class NutritionAdviserDashboard:
         for label in sales_labels:
             if label in sales_distribution.columns:
                 sales_summary[f'{label}人数'] = sales_distribution[label]
+                # sales_summary[f'{label}占比'] = sales_percentage[label].round(1)
 
         # 添加总人数
         sales_summary['总人数'] = sales_distribution.sum(axis=1)
@@ -389,7 +314,12 @@ class NutritionAdviserDashboard:
 
         # 使用go.Figure创建堆叠条形图
         st.subheader("销售利润分布可视化")
+
+        # 创建堆叠条形图
         self.create_stacked_bar_chart(sales_distribution, month)
+
+        # 创建百分比堆叠条形图
+        self.create_stacked_percentage_chart(sales_percentage, month)
 
     def create_stacked_bar_chart(self, sales_distribution, month):
         """使用go.Figure创建堆叠条形图，并将数值标注放在柱形右侧"""
@@ -401,13 +331,17 @@ class NutritionAdviserDashboard:
         fig = go.Figure()
 
         # 定义颜色
-        colors = ['#8dd3c7', '#ffffb4', '#bebadb', '#fb8072']
+        colors = ['#8dd3c7', '#ffffb4', '#bebadb', '#fb8072']  # 蓝色、橙色、绿色、红色
 
         # 为每个坎级添加一个条形图轨迹
         for i, label in enumerate(sales_labels):
+            # 获取当前坎级的数据
             y_data = sales_distribution[label]
+
+            # 创建文本标注 - 将数值放在柱形右侧
             text_positions = []
             for j, value in enumerate(y_data):
+                # 如果值为0，不显示文本
                 if value == 0:
                     text_positions.append("")
                 else:
@@ -419,28 +353,99 @@ class NutritionAdviserDashboard:
                 y=y_data,
                 text=text_positions,
                 textposition='outside',
-                textfont=dict(size=12, color='black'),
+                textfont=dict(
+                    size=12,  # 增大字体大小
+                    color='black'  # 使用黑色字体，提高可读性
+                ),
                 marker_color=colors[i % len(colors)],
-                hovertemplate=f"<b>{label}</b><br>顾问类型: %{x}<br>人数: %{y}<br><extra></extra>"
+                hovertemplate=f"<b>{label}</b><br>" +
+                              "顾问类型: %{x}<br>" +
+                              "人数: %{y}<br>" +
+                              "<extra></extra>"
             ))
 
         # 更新布局
         fig.update_layout(
-            title=dict(text=f"{month} 各类型顾问销售利润分布", font=dict(size=18)),
-            xaxis=dict(title="顾问类型", title_font=dict(size=14), tickfont=dict(size=12)),
-            yaxis=dict(title="人数", title_font=dict(size=14), tickfont=dict(size=12)),
-            barmode='stack', height=500, showlegend=True,
-            margin=dict(l=50, r=50, t=80, b=50), uniformtext_minsize=12
+            title=dict(
+                text=f"{month} 各类型顾问销售利润分布",
+                font=dict(size=18)  # 增大标题字体
+            ),
+            xaxis=dict(
+                title="顾问类型",
+                title_font=dict(size=14),
+                tickfont=dict(size=12)
+            ),
+            yaxis=dict(
+                title="人数",
+                title_font=dict(size=14),
+                tickfont=dict(size=12)
+            ),
+            barmode='stack',
+            height=500,  # 增加图表高度，为外部文本留出空间
+            showlegend=True,
+            margin=dict(l=50, r=50, t=80, b=50),  # 调整边距，为外部文本留出空间
+            uniformtext_minsize=12,  # 设置最小文本大小
+            # uniformtext_mode='hide'  # 隐藏太小的文本
         )
 
         # 确保y轴有足够的空间显示外部文本
         max_value = sales_distribution.sum(axis=1).max()
-        fig.update_yaxes(range=[0, max_value * 1.15])
+        fig.update_yaxes(range=[0, max_value * 1.15])  # 增加15%的顶部空间
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    def create_stacked_percentage_chart(self, sales_percentage, month):
+        """使用go.Figure创建百分比堆叠条形图，并添加文本标注"""
+        # 获取顾问类型和坎级标签
+        adviser_types = sales_percentage.index.tolist()
+        sales_labels = sales_percentage.columns.tolist()
+
+        # 创建图形
+        fig = go.Figure()
+
+        # 定义颜色
+        colors = ['#8dd3c7', '#ffffb4', '#bebadb', '#fb8072']
+
+        # 为每个坎级添加一个条形图轨迹
+        for i, label in enumerate(sales_labels):
+            # 计算文本位置 - 将小数值放在外部
+            text_positions = []
+            for j, value in enumerate(sales_percentage[label]):
+                # 如果百分比小于5%，将文本放在外部
+                if value < 5:
+                    text_positions.append('outside')
+                else:
+                    text_positions.append('inside')
+
+            fig.add_trace(go.Bar(
+                name=label,
+                x=adviser_types,
+                y=sales_percentage[label],
+                text=[f"{v:.1f}%" for v in sales_percentage[label]],
+                textposition=text_positions,
+                textfont=dict(size=12, color='black'),
+                marker_color=colors[i % len(colors)],
+                hovertemplate=f"<b>{label}</b><br>" +
+                              "顾问类型: %{x}<br>" +
+                              "百分比: %{y:.1f}%<br>" +
+                              "<extra></extra>"
+            ))
+
+        # 更新布局
+        fig.update_layout(
+            title=f"{month} 各类型顾问销售利润分布百分比",
+            xaxis_title="顾问类型",
+            yaxis_title="百分比 (%)",
+            barmode='stack',
+            height=500,
+            showlegend=True,
+            uniformtext=dict(mode='hide', minsize=10)
+        )
 
         st.plotly_chart(fig, use_container_width=True)
 
     def create_region_analysis_chart(self, df, month):
-        """创建大区分析图表"""
+        """创建大区分析图表 - 简化版本"""
         st.subheader("🌍 大区绩效分析")
 
         if '大区' not in df.columns or '最终收益值' not in df.columns:
@@ -462,7 +467,7 @@ class NutritionAdviserDashboard:
         # 按平均收益排序
         region_stats = region_stats.sort_values('平均收益', ascending=True)
 
-        # 创建水平条形图
+        # 创建水平条形图 - 更简洁
         fig = px.bar(
             region_stats,
             y='大区',
@@ -474,7 +479,10 @@ class NutritionAdviserDashboard:
             text_auto='.0f'
         )
         fig.update_layout(
-            yaxis_title="大区", xaxis_title="平均收益（元）", height=400, showlegend=False
+            yaxis_title="大区",
+            xaxis_title="平均收益（元）",
+            height=400,
+            showlegend=False
         )
 
         st.plotly_chart(fig, use_container_width=True)
@@ -508,21 +516,26 @@ class NutritionAdviserDashboard:
         """创建趋势分析图表"""
         st.subheader("📅 多月份趋势分析")
 
-        all_data = self.get_all_data()
-        if len(all_data) < 2:
+        if len(self.monthly_data) < 2:
             st.info("需要至少两个月份的数据才能进行趋势分析")
             return
 
         # 准备趋势数据
         trend_data = []
-        for month, data_info in all_data.items():
+        for month, data_info in self.monthly_data.items():
             df = data_info['data']
-            if '最终收益值' in df.columns:
+            if '最终收益值' in df.columns and '顾问编制' in df.columns:
+                # 总体平均收益
                 overall_avg = df['最终收益值'].mean()
+
+                # 各类型顾问平均收益
+                type_avgs = df.groupby('顾问编制')['最终收益值'].mean().to_dict()
+
                 trend_data.append({
                     '月份': month,
                     '日期': data_info['date'],
                     '总体平均收益': overall_avg,
+                    **type_avgs
                 })
 
         if not trend_data:
@@ -534,24 +547,290 @@ class NutritionAdviserDashboard:
 
         # 创建趋势图
         fig = go.Figure()
+
+        # 添加总体平均线
         fig.add_trace(go.Scatter(
-            x=trend_df['月份'], y=trend_df['总体平均收益'],
-            mode='lines+markers', name='总体平均', line=dict(width=4)
+            x=trend_df['月份'],
+            y=trend_df['总体平均收益'],
+            mode='lines+markers',
+            name='总体平均',
+            line=dict(width=4)
         ))
 
+        # 添加各类型顾问趋势线
+        adviser_types = [col for col in trend_df.columns if col not in ['月份', '日期', '总体平均收益']]
+        colors = px.colors.qualitative.Set2
+
+        for i, adviser_type in enumerate(adviser_types):
+            if adviser_type in trend_df.columns:
+                fig.add_trace(go.Scatter(
+                    x=trend_df['月份'],
+                    y=trend_df[adviser_type],
+                    mode='lines+markers',
+                    name=adviser_type,
+                    line=dict(width=2, dash='dot'),
+                    marker=dict(size=6),
+                    line_shape='spline'
+                ))
+
         fig.update_layout(
-            title="各月份收益趋势", xaxis_title="月份", yaxis_title="平均收益（元）",
-            height=400, showlegend=True
+            title="各类型顾问收益趋势",
+            xaxis_title="月份",
+            yaxis_title="平均收益（元）",
+            height=400,
+            showlegend=True
         )
 
         st.plotly_chart(fig, use_container_width=True)
 
-    # 保留您原有的其他所有方法...
-    # [这里包含您原有的所有其他方法，包括create_region_strengths_weaknesses, create_performance_comparison等]
+        # 显示变化情况
+        st.subheader("月度变化分析")
+        if len(trend_df) > 1:
+            latest = trend_df.iloc[-1]
+            previous = trend_df.iloc[-2]
+
+            change = latest['总体平均收益'] - previous['总体平均收益']
+            change_percent = (change / previous['总体平均收益']) * 100
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric(
+                    "总体平均收益",
+                    f"¥{latest['总体平均收益']:,.0f}",
+                    f"{change_percent:+.1f}%"
+                )
+
+            with col2:
+                # 计算表现最好的顾问类型
+                best_type = None
+                best_value = -float('inf')
+                for col in adviser_types:
+                    if col in latest and col in previous:
+                        change_val = latest[col] - previous[col]
+                        if change_val > best_value:
+                            best_value = change_val
+                            best_type = col
+
+                if best_type:
+                    st.metric(
+                        "进步最大类型",
+                        best_type,
+                        f"¥{best_value:+.0f}"
+                    )
+
+    def create_region_strengths_weaknesses(self, df, region, previous_month_data=None):
+        """创建区域优势与劣势报告 - 优化版本"""
+        st.subheader(f"📋 {region} 区域优势与劣势分析")
+
+        if df.empty or '大区' not in df.columns:
+            st.warning("无法进行区域分析")
+            return
+
+        # 筛选指定区域数据
+        region_data = df[df['大区'] == region]
+        if region_data.empty:
+            st.warning(f"没有找到 {region} 的数据")
+            return
+
+        # 计算区域平均值
+        region_avg_sales = region_data['销售利润'].mean() if '销售利润' in region_data.columns else 0
+        region_avg_new_customer = region_data['新客贡献'].mean() if '新客贡献' in region_data.columns else 0
+        region_avg_member_value = region_data['会员价值贡献'].mean() if '会员价值贡献' in region_data.columns else 0
+        region_avg_trial = region_data['试饮获客贡献'].mean() if '试饮获客贡献' in region_data.columns else 0
+        region_avg_internal = region_data['A+B内码贡献'].mean() if 'A+B内码贡献' in region_data.columns else 0
+
+        # 计算全区域平均值
+        overall_avg_sales = df['销售利润'].mean() if '销售利润' in df.columns else 0
+        overall_avg_new_customer = df['新客贡献'].mean() if '新客贡献' in df.columns else 0
+        overall_avg_member_value = df['会员价值贡献'].mean() if '会员价值贡献' in df.columns else 0
+        overall_avg_trial = df['试饮获客贡献'].mean() if '试饮获客贡献' in df.columns else 0
+        overall_avg_internal = df['A+B内码贡献'].mean() if 'A+B内码贡献' in df.columns else 0
+
+        # 优势与劣势分析
+        st.subheader("✅ 优势与薄弱环节分析")
+
+        # 创建指标数据框
+        metrics_data = {
+            '指标': ['销售利润', '新客贡献', '会员价值', '试饮获客', 'A+B内码贡献'],
+            f'{region}区域平均值': [
+                region_avg_sales,
+                region_avg_new_customer,
+                region_avg_member_value,
+                region_avg_trial,
+                region_avg_internal
+            ],
+            '全区域平均值': [
+                overall_avg_sales,
+                overall_avg_new_customer,
+                overall_avg_member_value,
+                overall_avg_trial,
+                overall_avg_internal
+            ]
+        }
+
+        metrics_df = pd.DataFrame(metrics_data)
+        metrics_df['差异'] = metrics_df[f'{region}区域平均值'] - metrics_df['全区域平均值']
+        metrics_df['差异百分比'] = (metrics_df['差异'] / metrics_df['全区域平均值'] * 100).round(1)
+        metrics_df = metrics_df.fillna(0)
+
+        # 方法1: 使用百分比差异条形图
+        st.subheader("📊 与全区域平均的百分比差异")
+
+        # 创建百分比差异条形图
+        fig = px.bar(
+            metrics_df,
+            x='差异百分比',
+            y='指标',
+            orientation='h',
+            title=f"{region}区域 vs 全区域平均 - 百分比差异",
+            color='差异百分比',
+            color_continuous_scale='RdYlGn',
+            text_auto='.1f'
+        )
+        fig.update_layout(
+            xaxis_title="与全区域平均的差异百分比 (%)",
+            yaxis_title="指标",
+            height=400
+        )
+        fig.update_traces(texttemplate='%{x:.1f}%', textposition='outside')
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # 方法2: 使用并列条形图显示实际数值
+        st.subheader("📈 各指标实际数值对比")
+
+        # 准备数据用于并列条形图
+        comparison_data = []
+        for _, row in metrics_df.iterrows():
+            comparison_data.append({
+                '指标': row['指标'],
+                '数值': row[f'{region}区域平均值'],
+                '类型': f'{region}区域'
+            })
+            comparison_data.append({
+                '指标': row['指标'],
+                '数值': row['全区域平均值'],
+                '类型': '全区域平均'
+            })
+
+        comparison_df = pd.DataFrame(comparison_data)
+
+        # 创建并列条形图
+        fig2 = px.bar(
+            comparison_df,
+            x='指标',
+            y='数值',
+            color='类型',
+            barmode='group',
+            title=f"{region}区域 vs 全区域平均 - 实际数值对比",
+            text_auto='.0f'
+        )
+        fig2.update_layout(
+            xaxis_title="指标",
+            yaxis_title="数值（元）",
+            height=400
+        )
+
+        st.plotly_chart(fig2, use_container_width=True)
+
+        # 方法3: 使用表格显示详细数据
+        st.subheader("📋 详细指标数据")
+
+        # 格式化数值显示
+        display_df = metrics_df.copy()
+        for col in [f'{region}区域平均值', '全区域平均值', '差异']:
+            if col in display_df.columns:
+                display_df[col] = display_df[col].apply(lambda x: f"¥{x:,.0f}" if pd.notnull(x) else "¥0")
+
+        display_df['差异百分比'] = display_df['差异百分比'].apply(lambda x: f"{x:+.1f}%" if pd.notnull(x) else "0.0%")
+
+        # 添加颜色标记
+        def color_percentage(val):
+            if isinstance(val, str) and '%' in val:
+                try:
+                    num = float(val.replace('%', ''))
+                    if num > 0:
+                        return 'color: green; font-weight: bold'
+                    elif num < 0:
+                        return 'color: red; font-weight: bold'
+                except:
+                    pass
+            return ''
+
+        # 显示表格
+        styled_df = display_df.style.applymap(color_percentage, subset=['差异百分比'])
+        st.dataframe(styled_df, use_container_width=True)
+
+        # 方法4: 使用KPI卡片显示关键指标
+        st.subheader("🎯 关键绩效指标")
+
+        # 选择最重要的3个指标进行KPI展示
+        top_metrics = metrics_df.nlargest(3, '差异百分比')
+        bottom_metrics = metrics_df.nsmallest(3, '差异百分比')
+
+        col1, col2, col3 = st.columns(3)
+        metrics_cols = [col1, col2, col3]
+
+        for i, (_, row) in enumerate(top_metrics.iterrows()):
+            with metrics_cols[i]:
+                metric_value = row['差异百分比']
+                metric_name = row['指标']
+
+                if metric_value > 0:
+                    st.metric(
+                        label=f"✅ {metric_name}",
+                        value=f"+{metric_value:.1f}%",
+                        delta=f"优于平均 {metric_value:.1f}%"
+                    )
+                else:
+                    st.metric(
+                        label=f"⚠️ {metric_name}",
+                        value=f"{metric_value:.1f}%",
+                        delta=f"低于平均 {abs(metric_value):.1f}%"
+                    )
+
+        # 显示总结分析
+        st.subheader("📝 区域表现总结")
+
+        # 计算优势指标数量
+        advantage_count = len(metrics_df[metrics_df['差异百分比'] > 0])
+        disadvantage_count = len(metrics_df[metrics_df['差异百分比'] < 0])
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if advantage_count > 0:
+                st.success(f"**优势领域**: {region}区域在 {advantage_count} 个指标上优于全区域平均")
+                # 列出具体优势指标
+                advantage_metrics = metrics_df[metrics_df['差异百分比'] > 0]['指标'].tolist()
+                st.write(f"优势指标: {', '.join(advantage_metrics)}")
+            else:
+                st.info("**暂无显著优势指标**")
+
+        with col2:
+            if disadvantage_count > 0:
+                st.error(f"**需改进领域**: {region}区域在 {disadvantage_count} 个指标上低于全区域平均")
+                # 列出具体需改进指标
+                disadvantage_metrics = metrics_df[metrics_df['差异百分比'] < 0]['指标'].tolist()
+                st.write(f"需改进指标: {', '.join(disadvantage_metrics)}")
+            else:
+                st.success("**所有指标均达到或超过全区域平均水平**")
+
+        # 提供改进建议
+        if disadvantage_count > 0:
+            st.subheader("💡 改进建议")
+
+            # 找出差异最大的需改进指标
+            if not metrics_df[metrics_df['差异百分比'] < 0].empty:
+                worst_metric = metrics_df[metrics_df['差异百分比'] < 0].nsmallest(1, '差异百分比').iloc[0]
+                worst_metric_name = worst_metric['指标']
+                worst_metric_gap = abs(worst_metric['差异百分比'])
+
+                st.info(
+                    f"**重点关注**: {worst_metric_name} 指标低于全区域平均 {worst_metric_gap:.1f}%，建议优先改进此领域。")
 
     def create_performance_comparison(self, df, month):
         """创建前100名与后100名营养顾问的优劣势分析"""
-        # 您原有的完整代码保持不变
         st.subheader("🏆 前100名 vs 后100名 营养顾问优劣势分析")
 
         if df.empty or '最终收益值' not in df.columns:
@@ -597,36 +876,131 @@ class NutritionAdviserDashboard:
         }
 
         comparison_df = pd.DataFrame(comparison_data)
-        comparison_df['前100名优势百分比'] = ((comparison_df['前100名平均值'] - comparison_df['后100名平均值']) / comparison_df['后100名平均值'] * 100).round(1)
+        comparison_df['前100名优势百分比'] = (
+                    (comparison_df['前100名平均值'] - comparison_df['后100名平均值']) / comparison_df[
+                '后100名平均值'] * 100).round(1)
+        comparison_df['前100名vs全量优势百分比'] = (
+                    (comparison_df['前100名平均值'] - comparison_df['全量平均值']) / comparison_df[
+                '全量平均值'] * 100).round(1)
         comparison_df = comparison_df.fillna(0)
 
         # 显示关键指标对比
         st.subheader("📊 关键指标对比")
+
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("前100名平均收益", f"¥{top_100['最终收益值'].mean():,.0f}")
         with col2:
             st.metric("后100名平均收益", f"¥{bottom_100['最终收益值'].mean():,.0f}")
         with col3:
-            advantage = ((top_100['最终收益值'].mean() - bottom_100['最终收益值'].mean()) / bottom_100['最终收益值'].mean() * 100)
+            advantage = ((top_100['最终收益值'].mean() - bottom_100['最终收益值'].mean()) / bottom_100[
+                '最终收益值'].mean() * 100)
             st.metric("前100名优势", f"{advantage:.1f}%")
 
         # 创建对比条形图
         fig = px.bar(
-            comparison_df, x='指标', y=['前100名平均值', '后100名平均值', '全量平均值'],
-            title=f"{month} 前100名 vs 后100名 关键指标对比", barmode='group',
-            labels={'value': '平均值', 'variable': '分组'}, text_auto='.0f'
+            comparison_df,
+            x='指标',
+            y=['前100名平均值', '后100名平均值', '全量平均值'],
+            title=f"{month} 前100名 vs 后100名 关键指标对比",
+            barmode='group',
+            labels={'value': '平均值', 'variable': '分组'},
+            text_auto='.0f'
         )
-        fig.update_layout(xaxis_title="指标", yaxis_title="平均值（元）", height=400)
+        fig.update_layout(
+            xaxis_title="指标",
+            yaxis_title="平均值（元）",
+            height=400
+        )
         st.plotly_chart(fig, use_container_width=True)
+
+        # 显示优势百分比
+        st.subheader("📈 前100名优势分析")
+
+        # 创建优势百分比条形图
+        fig2 = px.bar(
+            comparison_df,
+            x='指标',
+            y='前100名优势百分比',
+            title=f"{month} 前100名相对于后100名的优势百分比",
+            color='前100名优势百分比',
+            color_continuous_scale='RdYlGn',
+            text_auto='.1f'
+        )
+        fig2.update_layout(
+            xaxis_title="指标",
+            yaxis_title="优势百分比 (%)",
+            height=400
+        )
+        fig2.update_traces(texttemplate='%{y:.1f}%')
+        st.plotly_chart(fig2, use_container_width=True)
 
         # 显示详细对比表格
         st.subheader("📋 详细对比数据")
+
+        # 格式化显示
         display_df = comparison_df.copy()
         for col in ['前100名平均值', '后100名平均值', '全量平均值']:
             display_df[col] = display_df[col].apply(lambda x: f"¥{x:,.0f}" if pd.notnull(x) else "¥0")
+
         display_df['前100名优势百分比'] = display_df['前100名优势百分比'].apply(lambda x: f"{x:+.1f}%")
+        display_df['前100名vs全量优势百分比'] = display_df['前100名vs全量优势百分比'].apply(lambda x: f"{x:+.1f}%")
+
         st.dataframe(display_df, use_container_width=True)
+
+        # 显示关键发现
+        st.subheader("💡 关键发现与建议")
+
+        # 找出最大优势指标
+        max_advantage_row = comparison_df.loc[comparison_df['前100名优势百分比'].idxmax()]
+        max_advantage_metric = max_advantage_row['指标']
+        max_advantage = max_advantage_row['前100名优势百分比']
+
+        # 找出最小优势指标（可能是劣势）
+        min_advantage_row = comparison_df.loc[comparison_df['前100名优势百分比'].idxmin()]
+        min_advantage_metric = min_advantage_row['指标']
+        min_advantage = min_advantage_row['前100名优势百分比']
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.success(f"**最大优势**: 前100名在 **{max_advantage_metric}** 上领先后100名 **{max_advantage:.1f}%**")
+            st.info("✅ 建议: 继续保持这一优势，将此成功经验推广到其他顾问")
+
+        with col2:
+            if min_advantage < 0:
+                st.error(f"**需关注**: 前100名在 **{min_advantage_metric}** 上仅领先后100名 **{min_advantage:.1f}%**")
+                st.warning("⚠️ 建议: 需要加强此方面的培训和资源支持")
+            else:
+                st.info(f"**相对弱项**: 前100名在 **{min_advantage_metric}** 上领先优势较小 (**{min_advantage:.1f}%**)")
+                st.info("💡 建议: 仍有提升空间，可针对性优化")
+
+        # 顾问类型分布对比
+        if '顾问编制' in df.columns:
+            st.subheader("👥 顾问类型分布对比")
+
+            top_types = top_100['顾问编制'].value_counts()
+            bottom_types = bottom_100['顾问编制'].value_counts()
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.write("**前100名顾问类型分布**")
+                fig3 = px.pie(
+                    values=top_types.values,
+                    names=top_types.index,
+                    title="前100名顾问类型分布"
+                )
+                st.plotly_chart(fig3, use_container_width=True)
+
+            with col2:
+                st.write("**后100名顾问类型分布**")
+                fig4 = px.pie(
+                    values=bottom_types.values,
+                    names=bottom_types.index,
+                    title="后100名顾问类型分布"
+                )
+                st.plotly_chart(fig4, use_container_width=True)
 
 
 def main():
@@ -643,27 +1017,53 @@ def main():
     # 创建仪表板实例
     dashboard = NutritionAdviserDashboard(data_folder)
 
-    # 文件上传功能 - 作为补充选项
-    st.sidebar.subheader("📤 文件上传功能")
+    # 文件上传功能 - 作为备用选项
+    st.sidebar.subheader("备用上传选项")
     uploaded_files = st.sidebar.file_uploader(
-        "上传Excel文件（补充或覆盖本地数据）",
+        "上传Excel文件（如果数据文件夹为空）",
         type=["xlsx"],
         accept_multiple_files=True,
-        help="请上传利润模型评估报告Excel文件。上传的文件将优先于本地文件显示。"
+        help="请上传利润模型评估报告Excel文件"
     )
 
     # 处理上传的文件
-    if uploaded_files:
-        dashboard.load_uploaded_files(uploaded_files)
+    if uploaded_files and len(dashboard.monthly_data) == 0:
+        for uploaded_file in uploaded_files:
+            try:
+                # 读取上传的文件
+                df = pd.read_excel(uploaded_file)
+
+                # 尝试从文件名提取月份信息
+                filename = uploaded_file.name
+                month_key = "上传数据"  # 默认名称
+
+                # 尝试解析文件名中的日期
+                if "利润模型评估报告_原始收益值_" in filename:
+                    date_str = filename.replace("利润模型评估报告_原始收益值_", "").replace(".xlsx", "")
+                    try:
+                        file_date = datetime.strptime(date_str, "%Y%m")
+                        month_key = file_date.strftime("%Y年%m月")
+                    except:
+                        month_key = filename.replace(".xlsx", "")
+
+                # 添加月份标识
+                df['月份'] = month_key
+                df['日期'] = datetime.now()  # 使用当前日期作为占位符
+
+                # 存储数据
+                dashboard.monthly_data[month_key] = {
+                    'data': df,
+                    'date': datetime.now(),
+                    'file_path': f"上传文件: {filename}"
+                }
+
+                st.sidebar.success(f"已加载: {month_key}")
+
+            except Exception as e:
+                st.sidebar.error(f"处理文件 {uploaded_file.name} 时出错: {str(e)}")
 
     # 月份选择器
     available_months = dashboard.get_available_months()
-    
-    # 显示数据来源统计
-    local_count = len(dashboard.monthly_data)
-    uploaded_count = len(dashboard.uploaded_data)
-    st.sidebar.info(f"📊 数据统计: 本地{local_count}个月, 上传{uploaded_count}个月")
-
     if available_months:
         selected_month = st.sidebar.selectbox(
             "选择查看月份",
@@ -673,6 +1073,9 @@ def main():
 
         # 获取上月数据
         previous_month = dashboard.get_previous_month(selected_month)
+        previous_month_data = None
+        if previous_month:
+            previous_month_data = dashboard.get_month_data(previous_month)
 
         # 显示数据概览
         dashboard.create_overview_dashboard(selected_month)
@@ -681,15 +1084,12 @@ def main():
         st.markdown("---")
         st.header("📋 详细数据查看")
 
-        tab1, tab2, tab3, tab4 = st.tabs(["原始数据", "绩效排名", "前100vs后100分析", "区域详情"])
+        # 注意：这里原代码有tab3重复的问题，我已经修复
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["原始数据", "绩效排名", "前100vs后100分析", "区域详情", "区域分析报告"])
 
         with tab1:
             df = dashboard.get_month_data(selected_month)
             if not df.empty:
-                # 显示数据来源信息
-                data_source = "上传文件" if selected_month in dashboard.uploaded_data else "本地文件"
-                st.subheader(f"{selected_month} - 原始数据 [来源: {data_source}]")
-                
                 st.dataframe(df, use_container_width=True)
 
                 # 添加数据下载功能
@@ -709,9 +1109,17 @@ def main():
                 # 添加排名选项 - 使用3列布局
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    rank_by = st.selectbox("排名依据", options=["最终收益值", "销售利润", "总收益"], index=0)
+                    rank_by = st.selectbox(
+                        "排名依据",
+                        options=["最终收益值", "销售利润", "总收益"],
+                        index=0
+                    )
                 with col2:
-                    rank_type = st.selectbox("排名类型", options=["前N名", "后N名"], index=0)
+                    rank_type = st.selectbox(
+                        "排名类型",
+                        options=["前N名", "后N名"],
+                        index=0
+                    )
                 with col3:
                     top_n = st.slider("显示N名", 10, min(200, len(df)), 20)
 
@@ -727,12 +1135,15 @@ def main():
 
                 # 选择要显示的列
                 display_columns = []
-                for col in ['顾问名称', '顾问编制', '大区', '区域', '门店名称', '最终收益值', '销售利润', '总收益']:
+                for col in ['顾问名称', '顾问编制', '大区', '区域', '门店名称',
+                            '最终收益值', '销售利润', '总收益']:
                     if col in ranked_df.columns:
                         display_columns.append(col)
 
                 ranked_df = ranked_df[display_columns]
                 ranked_df['排名'] = range(1, len(ranked_df) + 1)
+
+                # 重新排列列顺序，将排名放在第一列
                 cols = ['排名'] + [col for col in ranked_df.columns if col != '排名']
                 ranked_df = ranked_df[cols]
 
@@ -743,11 +1154,12 @@ def main():
         with tab3:
             df = dashboard.get_month_data(selected_month)
             if not df.empty and '最终收益值' in df.columns:
+                # 创建前100名与后100名对比分析
                 dashboard.create_performance_comparison(df, selected_month)
             else:
                 st.warning("没有足够的数据进行对比分析")
 
-        with tab4:
+        with tab4:  # 修正：这里应该是tab4，不是第二个tab3
             df = dashboard.get_month_data(selected_month)
             if not df.empty and '大区' in df.columns:
                 # 选择要查看的大区
@@ -758,6 +1170,7 @@ def main():
 
                 if not region_data.empty:
                     col1, col2 = st.columns(2)
+
                     with col1:
                         st.subheader(f"{selected_region} - 关键指标")
                         st.metric("顾问人数", len(region_data))
@@ -767,8 +1180,11 @@ def main():
                     with col2:
                         st.subheader("顾问类型分布")
                         type_dist = region_data['顾问编制'].value_counts()
-                        fig = px.pie(values=type_dist.values, names=type_dist.index, 
-                                   title=f"{selected_region} 顾问类型分布")
+                        fig = px.pie(
+                            values=type_dist.values,
+                            names=type_dist.index,
+                            title=f"{selected_region} 顾问类型分布"
+                        )
                         st.plotly_chart(fig, use_container_width=True)
 
                     # 显示该区域详细数据
@@ -776,6 +1192,18 @@ def main():
                     st.dataframe(region_data, use_container_width=True)
                 else:
                     st.warning(f"没有找到 {selected_region} 的数据")
+            else:
+                st.warning("没有区域数据可显示")
+
+        with tab5:  # 修正：这里应该是tab5
+            df = dashboard.get_month_data(selected_month)
+            if not df.empty and '大区' in df.columns:
+                # 选择要分析的大区
+                regions = df['大区'].unique()
+                selected_region = st.selectbox("选择要分析的大区", options=regions, key="analysis_region")
+
+                # 创建区域优势与劣势报告
+                dashboard.create_region_strengths_weaknesses(df, selected_region, previous_month_data)
             else:
                 st.warning("没有区域数据可显示")
 
@@ -787,9 +1215,9 @@ def main():
         ## 使用说明
 
         1. **数据加载**: 应用会自动从指定文件夹加载Excel文件
-        2. **文件上传**: 可通过侧边栏上传Excel文件作为补充或覆盖
-        3. **文件格式**: 文件命名格式应为: `利润模型评估报告_原始收益值_YYYYMM.xlsx`
-        4. **数据优先级**: 上传的文件优先于本地文件显示
+        2. **文件格式**: 文件命名格式应为: `利润模型评估报告_原始收益值_YYYYMM.xlsx`
+        3. **数据路径**: 当前数据路径: `/Users/Yvonne/Desktop/伊利/人效分析/营养顾问分析报告`
+        4. **备用上传**: 如果数据文件夹为空，可通过侧边栏上传Excel文件
 
         ## 文件格式要求
 
