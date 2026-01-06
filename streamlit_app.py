@@ -6,12 +6,10 @@ import plotly.graph_objects as go
 import os
 import glob
 import warnings
-import requests
-import io
 from datetime import datetime, timedelta
 import sys
 
-# 添加自定义模块路径
+# 添加自定义模块路径（如果需要）
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 warnings.filterwarnings('ignore')
@@ -49,140 +47,81 @@ st.markdown("""
     div[data-testid="stMetricValue"] {
         font-size: 1.1rem !important;
     }
-    .github-info {
-        background-color: #f0f8ff;
-        padding: 10px;
-        border-radius: 5px;
-        border-left: 4px solid #0366d6;
-        margin: 10px 0;
-    }
-    .data-source-selector {
-        margin-bottom: 20px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
 
 class NutritionAdviserDashboard:
-    def __init__(self):
-        """营养顾问绩效评估仪表板"""
+    def __init__(self, data_folder=None):
+        """
+        营养顾问绩效评估仪表板
+        data_folder: 包含月度Excel报告文件的文件夹路径
+        """
+        # 设置默认数据文件夹路径
+        if data_folder is None:
+            # 默认路径 - 根据您的需求修改
+            self.data_folder = "/Users/Yvonne/Desktop/伊利/人效分析/营养顾问分析报告"
+        else:
+            self.data_folder = data_folder
+
         self.monthly_data = {}
-        self.data_source = "github"  # 默认使用GitHub源
-        
-    def load_from_github(self):
-        """从GitHub仓库加载Excel文件"""
-        try:
-            # 获取当前文件的目录
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            
-            # 查找当前目录下的Excel文件
-            pattern = os.path.join(current_dir, "利润模型评估报告_原始收益值_*.xlsx")
-            excel_files = glob.glob(pattern)
-            
-            if not excel_files:
-                st.sidebar.warning("在GitHub仓库中没有找到Excel文件")
-                st.sidebar.info("请确保Excel文件与app.py在同一目录下")
-                return False
-            
-            st.sidebar.success(f"✅ 从GitHub仓库找到 {len(excel_files)} 个Excel文件")
-            
-            for file_path in excel_files:
-                try:
-                    # 从文件名提取月份信息
-                    filename = os.path.basename(file_path)
-                    
-                    if "利润模型评估报告_原始收益值_" in filename:
-                        date_str = filename.replace("利润模型评估报告_原始收益值_", "").replace(".xlsx", "")
-                        
-                        # 尝试解析日期
-                        try:
-                            file_date = datetime.strptime(date_str, "%Y%m")
-                            month_key = file_date.strftime("%Y年%m月")
-                            
-                            # 读取Excel文件
-                            df = pd.read_excel(file_path)
-                            
-                            # 添加月份标识列
-                            df['月份'] = month_key
-                            df['日期'] = file_date
-                            df['数据来源'] = 'GitHub仓库'
-                            
-                            # 存储数据
-                            self.monthly_data[month_key] = {
-                                'data': df,
-                                'date': file_date,
-                                'file_path': filename,
-                                'source': 'github'
-                            }
-                            
-                            st.sidebar.success(f"✅ 已加载: {month_key}")
-                            
-                        except ValueError as e:
-                            st.sidebar.warning(f"文件名日期格式不正确 {filename}: {str(e)}")
-                            
-                except Exception as e:
-                    st.sidebar.error(f"加载文件失败 {file_path}: {str(e)}")
-            
-            return len(excel_files) > 0
-            
-        except Exception as e:
-            st.sidebar.error(f"从GitHub加载数据失败: {str(e)}")
-            return False
-    
-    def load_from_upload(self, uploaded_files):
-        """从上传的文件加载数据"""
-        if not uploaded_files:
-            return False
-        
-        loaded_count = 0
-        for uploaded_file in uploaded_files:
+        self.load_monthly_data()
+
+    def load_monthly_data(self):
+        """加载所有月份的Excel报告数据"""
+        # 检查文件夹是否存在
+        if not os.path.exists(self.data_folder):
+            st.sidebar.error(f"数据文件夹不存在: {self.data_folder}")
+            st.sidebar.info("请上传Excel文件进行分析")
+            return
+
+        # 查找所有符合命名模式的Excel文件
+        pattern = os.path.join(self.data_folder, "利润模型评估报告_原始收益值_*.xlsx")
+        excel_files = glob.glob(pattern)
+
+        if not excel_files:
+            st.sidebar.warning(f"在 {self.data_folder} 中没有找到Excel文件")
+            st.sidebar.info("请确保文件命名格式为: 利润模型评估报告_原始收益值_YYYYMM.xlsx")
+            return
+
+        st.sidebar.info(f"找到 {len(excel_files)} 个Excel文件")
+
+        for file_path in excel_files:
             try:
                 # 从文件名提取月份信息
-                filename = uploaded_file.name
-                
-                # 提取月份
+                filename = os.path.basename(file_path)
+
+                # 假设文件名格式: 利润模型评估报告_原始收益值_YYYYMM.xlsx
                 if "利润模型评估报告_原始收益值_" in filename:
                     date_str = filename.replace("利润模型评估报告_原始收益值_", "").replace(".xlsx", "")
+
+                    # 尝试解析日期
                     try:
                         file_date = datetime.strptime(date_str, "%Y%m")
                         month_key = file_date.strftime("%Y年%m月")
-                    except:
-                        month_key = filename.replace(".xlsx", "")
-                else:
-                    month_key = filename.replace(".xlsx", "")
-                
-                # 读取Excel文件
-                df = pd.read_excel(uploaded_file)
-                
-                # 添加月份标识列
-                df['月份'] = month_key
-                df['日期'] = datetime.now()
-                df['数据来源'] = '上传文件'
-                
-                # 存储数据
-                self.monthly_data[month_key] = {
-                    'data': df,
-                    'date': datetime.now(),
-                    'file_path': f"上传文件: {filename}",
-                    'source': 'uploaded'
-                }
-                
-                loaded_count += 1
-                st.sidebar.success(f"✅ 已加载上传文件: {month_key} (共{len(df)}条记录)")
-                
+
+                        # 读取Excel文件
+                        df = pd.read_excel(file_path)
+
+                        # 添加月份标识列
+                        df['月份'] = month_key
+                        df['日期'] = file_date
+
+                        # 存储数据
+                        self.monthly_data[month_key] = {
+                            'data': df,
+                            'date': file_date,
+                            'file_path': file_path
+                        }
+
+                        st.sidebar.success(f"已加载: {month_key}")
+
+                    except ValueError as e:
+                        st.sidebar.warning(f"文件名日期格式不正确 {filename}: {str(e)}")
+
             except Exception as e:
-                st.sidebar.error(f"❌ 处理上传文件 {uploaded_file.name} 时出错: {str(e)}")
-        
-        return loaded_count > 0
-    
-    def set_data_source(self, source):
-        """设置数据源"""
-        self.data_source = source
-    
-    def clear_data(self):
-        """清空数据"""
-        self.monthly_data = {}
-    
+                st.sidebar.error(f"加载文件失败 {file_path}: {str(e)}")
+
     def get_available_months(self):
         """获取可用的月份列表"""
         if not self.monthly_data:
@@ -190,11 +129,11 @@ class NutritionAdviserDashboard:
         return sorted(self.monthly_data.keys(),
                       key=lambda x: self.monthly_data[x]['date'],
                       reverse=True)
-    
+
     def get_month_data(self, month):
         """获取指定月份的数据"""
         return self.monthly_data.get(month, {}).get('data', pd.DataFrame())
-    
+
     def get_previous_month(self, current_month):
         """获取上一个月份的数据"""
         months = self.get_available_months()
@@ -206,6 +145,238 @@ class NutritionAdviserDashboard:
             return months[current_index + 1]  # 因为是倒序排列
         return None
 
+    def create_member_value_analysis(self, selected_month):
+        """创建会员价值贡献分析"""
+        st.header(f"📈 会员价值贡献分析 - {selected_month}")
+
+        # 获取当月数据
+        current_month_data = self.get_month_data(selected_month)
+        if current_month_data.empty or '会员价值贡献' not in current_month_data.columns or '大区' not in current_month_data.columns:
+            st.warning("当月数据中没有会员价值贡献或大区信息")
+            return
+
+        # 功能1: 各区域会员价值贡献总量柱状图
+        st.subheader("1. 各区域会员价值贡献总量")
+
+        # 计算各区域会员价值贡献总量
+        region_member_value = current_month_data.groupby('大区')['会员价值贡献'].sum().reset_index()
+        region_member_value = region_member_value.sort_values('会员价值贡献', ascending=True)
+
+        # 创建柱状图
+        fig1 = px.bar(
+            region_member_value,
+            y='大区',
+            x='会员价值贡献',
+            orientation='h',
+            title=f"{selected_month} 各区域会员价值贡献总量",
+            color='会员价值贡献',
+            color_continuous_scale='Viridis',
+            text_auto='.0f'
+        )
+        fig1.update_layout(
+            yaxis_title="大区",
+            xaxis_title="会员价值贡献总量（元）",
+            height=500
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+
+        # 显示详细数据
+        st.subheader("各区域会员价值贡献详细数据")
+
+        # 计算各区域的统计指标
+        region_stats = current_month_data.groupby('大区').agg({
+            '会员价值贡献': ['sum', 'mean', 'count']
+        }).round(0)
+
+        region_stats.columns = ['贡献总量', '人均贡献', '顾问人数']
+        region_stats = region_stats.reset_index()
+        region_stats = region_stats.sort_values('贡献总量', ascending=False)
+
+        # 添加排名
+        region_stats['排名'] = range(1, len(region_stats) + 1)
+        region_stats = region_stats[['排名', '大区', '贡献总量', '人均贡献', '顾问人数']]
+
+        # 格式化显示
+        region_stats['贡献总量'] = region_stats['贡献总量'].apply(lambda x: f"¥{x:,.0f}")
+        region_stats['人均贡献'] = region_stats['人均贡献'].apply(lambda x: f"¥{x:,.0f}")
+
+        st.dataframe(region_stats, use_container_width=True)
+
+        # 功能2: 当月与上月各区域会员价值贡献对比
+        st.subheader("2. 当月与上月各区域会员价值贡献对比")
+
+        # 获取上月数据
+        previous_month = self.get_previous_month(selected_month)
+
+        if previous_month:
+            previous_month_data = self.get_month_data(previous_month)
+
+            if not previous_month_data.empty and '会员价值贡献' in previous_month_data.columns and '大区' in previous_month_data.columns:
+                # 计算当月各区域会员价值贡献总量
+                current_summary = current_month_data.groupby('大区')['会员价值贡献'].sum().reset_index()
+                current_summary.columns = ['大区', '当月贡献']
+
+                # 计算上月各区域会员价值贡献总量
+                previous_summary = previous_month_data.groupby('大区')['会员价值贡献'].sum().reset_index()
+                previous_summary.columns = ['大区', '上月贡献']
+
+                # 合并数据
+                comparison = pd.merge(current_summary, previous_summary, on='大区', how='outer')
+                comparison = comparison.fillna(0)
+
+                # 计算变化量和变化百分比
+                comparison['变化量'] = comparison['当月贡献'] - comparison['上月贡献']
+                comparison['变化百分比'] = (comparison['变化量'] / comparison['上月贡献'] * 100).round(1)
+                comparison = comparison.fillna(0)
+
+                # 创建变化量柱状图
+                fig2 = px.bar(
+                    comparison,
+                    x='大区',
+                    y='变化量',
+                    title=f"{selected_month} 与 {previous_month} 各区域会员价值贡献变化量",
+                    color='变化量',
+                    color_continuous_scale='RdYlGn',
+                    text_auto='+.0f'
+                )
+                fig2.update_layout(
+                    xaxis_title="大区",
+                    yaxis_title="变化量（元）",
+                    height=400
+                )
+                fig2.update_traces(texttemplate='%{y:+,.0f}元')
+                st.plotly_chart(fig2, use_container_width=True)
+
+                # 创建变化百分比柱状图
+                fig3 = px.bar(
+                    comparison,
+                    x='大区',
+                    y='变化百分比',
+                    title=f"{selected_month} 与 {previous_month} 各区域会员价值贡献变化百分比",
+                    color='变化百分比',
+                    color_continuous_scale='RdYlGn',
+                    text_auto='+.1f'
+                )
+                fig3.update_layout(
+                    xaxis_title="大区",
+                    yaxis_title="变化百分比 (%)",
+                    height=400
+                )
+                fig3.update_traces(texttemplate='%{y:+.1f}%')
+                st.plotly_chart(fig3, use_container_width=True)
+
+                # 创建对比折线图
+                st.subheader("各区域会员价值贡献趋势对比")
+
+                # 准备数据
+                trend_data = []
+                for _, row in comparison.iterrows():
+                    trend_data.append({
+                        '大区': row['大区'],
+                        '贡献值': row['上月贡献'],
+                        '月份': previous_month
+                    })
+                    trend_data.append({
+                        '大区': row['大区'],
+                        '贡献值': row['当月贡献'],
+                        '月份': selected_month
+                    })
+
+                trend_df = pd.DataFrame(trend_data)
+
+                # 创建折线图
+                fig4 = px.line(
+                    trend_df,
+                    x='月份',
+                    y='贡献值',
+                    color='大区',
+                    markers=True,
+                    title=f"各区域会员价值贡献趋势对比 ({previous_month} → {selected_month})",
+                    line_shape='spline'
+                )
+                fig4.update_layout(
+                    xaxis_title="月份",
+                    yaxis_title="会员价值贡献（元）",
+                    height=500,
+                    legend_title="大区"
+                )
+                st.plotly_chart(fig4, use_container_width=True)
+
+                # 显示详细对比数据
+                st.subheader("详细对比数据")
+
+                # 格式化显示
+                display_comparison = comparison.copy()
+                display_comparison['当月贡献'] = display_comparison['当月贡献'].apply(lambda x: f"¥{x:,.0f}")
+                display_comparison['上月贡献'] = display_comparison['上月贡献'].apply(lambda x: f"¥{x:,.0f}")
+                display_comparison['变化量'] = display_comparison['变化量'].apply(lambda x: f"¥{x:+,.0f}")
+                display_comparison['变化百分比'] = display_comparison['变化百分比'].apply(lambda x: f"{x:+.1f}%")
+
+                # 添加颜色标记函数
+                def color_style(val):
+                    if isinstance(val, str):
+                        if '¥+' in val or '¥0' in val:
+                            return 'color: green; font-weight: bold'
+                        elif '¥-' in val:
+                            return 'color: red; font-weight: bold'
+                    if isinstance(val, str) and '%' in val:
+                        try:
+                            num = float(val.replace('%', '').replace('+', ''))
+                            if num > 0:
+                                return 'color: green; font-weight: bold'
+                            elif num < 0:
+                                return 'color: red; font-weight: bold'
+                        except:
+                            pass
+                    return ''
+
+                # 应用样式
+                styled_df = display_comparison.style.applymap(color_style, subset=['变化量', '变化百分比'])
+                st.dataframe(styled_df, use_container_width=True)
+
+                # 显示关键发现
+                st.subheader("💡 关键发现")
+
+                # 找出增长最快和下降最多的区域
+                if not comparison.empty:
+                    # 增长最快的区域
+                    top_growth = comparison.nlargest(1, '变化百分比')
+                    if not top_growth.empty:
+                        top_region = top_growth.iloc[0]['大区']
+                        top_growth_pct = top_growth.iloc[0]['变化百分比']
+                        top_growth_val = top_growth.iloc[0]['变化量']
+
+                        st.success(
+                            f"**增长最快**: {top_region} 区域会员价值贡献增长 {top_growth_pct:.1f}% (¥{top_growth_val:+,.0f})")
+
+                    # 下降最多的区域
+                    bottom_growth = comparison.nsmallest(1, '变化百分比')
+                    if not bottom_growth.empty and bottom_growth.iloc[0]['变化百分比'] < 0:
+                        bottom_region = bottom_growth.iloc[0]['大区']
+                        bottom_growth_pct = bottom_growth.iloc[0]['变化百分比']
+                        bottom_growth_val = bottom_growth.iloc[0]['变化量']
+
+                        st.error(
+                            f"**需关注**: {bottom_region} 区域会员价值贡献下降 {abs(bottom_growth_pct):.1f}% (¥{bottom_growth_val:+,.0f})")
+
+                    # 计算总体变化
+                    total_current = current_summary['当月贡献'].sum()
+                    total_previous = previous_summary['上月贡献'].sum()
+                    total_change = total_current - total_previous
+                    total_change_pct = (total_change / total_previous * 100) if total_previous != 0 else 0
+
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("当月总贡献", f"¥{total_current:,.0f}")
+                    with col2:
+                        st.metric("上月总贡献", f"¥{total_previous:,.0f}")
+                    with col3:
+                        st.metric("总体变化", f"{total_change_pct:+.1f}%", f"¥{total_change:+,.0f}")
+            else:
+                st.warning(f"上月({previous_month})数据中没有会员价值贡献或大区信息")
+        else:
+            st.info("没有上月数据可用于对比分析")
+
     def create_overview_dashboard(self, selected_month):
         """创建概览仪表板"""
         st.header(f"📊 营养顾问绩效评估概览 - {selected_month}")
@@ -214,18 +385,6 @@ class NutritionAdviserDashboard:
         if df.empty:
             st.warning(f"没有找到 {selected_month} 的数据")
             return
-
-        # 显示数据来源
-        if selected_month in self.monthly_data:
-            data_source_info = self.monthly_data[selected_month]
-            source_type = data_source_info.get('source', 'unknown')
-            if source_type == 'github':
-                data_source = "GitHub仓库"
-            elif source_type == 'uploaded':
-                data_source = "上传文件"
-            else:
-                data_source = "未知"
-            st.caption(f"📁 数据来源: {data_source}")
 
         # 关键指标卡片
         col1, col2, col3, col4 = st.columns(4)
@@ -1080,106 +1239,63 @@ def main():
     """主函数"""
     st.title("🏢 营养顾问绩效评估系统")
     st.markdown("---")
-    
-    # 初始化session state
-    if 'dashboard' not in st.session_state:
-        st.session_state.dashboard = NutritionAdviserDashboard()
-        st.session_state.data_loaded = False
-        st.session_state.current_data_source = "github"
-    
-    # 侧边栏 - 数据源选择
-    st.sidebar.title("📁 数据源配置")
-    
-    # 数据源选择
-    data_source = st.sidebar.radio(
-        "选择数据源",
-        ["GitHub仓库", "文件上传"],
-        index=0,
-        help="选择从GitHub仓库自动读取Excel文件，或手动上传Excel文件"
+
+    # 侧边栏 - 文件上传和月份选择
+    st.sidebar.title("📁 数据管理")
+
+    # 设置数据文件夹路径
+    data_folder = "/Users/Yvonne/Desktop/伊利/人效分析/营养顾问分析报告"
+
+    # 创建仪表板实例
+    dashboard = NutritionAdviserDashboard(data_folder)
+
+    # 文件上传功能 - 作为备用选项
+    st.sidebar.subheader("备用上传选项")
+    uploaded_files = st.sidebar.file_uploader(
+        "上传Excel文件（如果数据文件夹为空）",
+        type=["xlsx"],
+        accept_multiple_files=True,
+        help="请上传利润模型评估报告Excel文件"
     )
-    
-    # 根据选择的数据源显示相应界面
-    if data_source == "GitHub仓库":
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("🔗 GitHub仓库数据")
-        
-        # 显示GitHub仓库信息
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        st.sidebar.info(f"当前目录: {current_dir}")
-        
-        # 检查当前目录下有哪些Excel文件
-        excel_files = glob.glob(os.path.join(current_dir, "利润模型评估报告_原始收益值_*.xlsx"))
-        
-        if excel_files:
-            st.sidebar.success(f"✅ 在仓库中找到 {len(excel_files)} 个Excel文件")
-            with st.sidebar.expander("📂 查看文件列表"):
-                for file in excel_files:
-                    filename = os.path.basename(file)
-                    st.sidebar.text(f"• {filename}")
-        else:
-            st.sidebar.warning("⚠️ 在仓库中未找到Excel文件")
-            st.sidebar.info("请确保Excel文件与app.py在同一目录下")
-        
-        # 加载GitHub数据按钮
-        if st.sidebar.button("🔄 加载GitHub数据", type="primary"):
-            with st.spinner("正在从GitHub仓库加载数据..."):
-                success = st.session_state.dashboard.load_from_github()
-                if success:
-                    st.session_state.data_loaded = True
-                    st.session_state.current_data_source = "github"
-                    st.sidebar.success("✅ 数据加载完成！")
-                    st.rerun()
-                else:
-                    st.sidebar.error("❌ 数据加载失败")
-    
-    elif data_source == "文件上传":
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("📤 文件上传")
-        
-        uploaded_files = st.sidebar.file_uploader(
-            "选择Excel文件",
-            type=["xlsx"],
-            accept_multiple_files=True,
-            help="请上传利润模型评估报告Excel文件。支持多文件上传。"
-        )
-        
-        if uploaded_files:
-            if st.sidebar.button("📥 加载上传数据", type="primary"):
-                with st.spinner("正在处理上传的文件..."):
-                    # 清空现有数据
-                    st.session_state.dashboard.clear_data()
-                    
-                    # 加载上传文件
-                    success = st.session_state.dashboard.load_from_upload(uploaded_files)
-                    if success:
-                        st.session_state.data_loaded = True
-                        st.session_state.current_data_source = "upload"
-                        st.sidebar.success("✅ 上传数据加载完成！")
-                        st.rerun()
-                    else:
-                        st.sidebar.error("❌ 数据加载失败")
-    
-    # 显示当前数据状态
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📊 数据状态")
-    
-    available_months = st.session_state.dashboard.get_available_months()
-    if available_months:
-        st.sidebar.success(f"✅ 已加载 {len(available_months)} 个月份的数据")
-        st.sidebar.info(f"📅 可用月份: {', '.join(available_months[:3])}{'...' if len(available_months) > 3 else ''}")
-    else:
-        st.sidebar.warning("⚠️ 暂无数据")
-        st.sidebar.info("请先选择数据源并加载数据")
-    
-    # 清除数据按钮
-    if st.sidebar.button("🗑️ 清除所有数据"):
-        st.session_state.dashboard.clear_data()
-        st.session_state.data_loaded = False
-        st.sidebar.success("✅ 数据已清除")
-        st.rerun()
-    
-    # 主界面
-    available_months = st.session_state.dashboard.get_available_months()
+
+    # 处理上传的文件
+    if uploaded_files and len(dashboard.monthly_data) == 0:
+        for uploaded_file in uploaded_files:
+            try:
+                # 读取上传的文件
+                df = pd.read_excel(uploaded_file)
+
+                # 尝试从文件名提取月份信息
+                filename = uploaded_file.name
+                month_key = "上传数据"  # 默认名称
+
+                # 尝试解析文件名中的日期
+                if "利润模型评估报告_原始收益值_" in filename:
+                    date_str = filename.replace("利润模型评估报告_原始收益值_", "").replace(".xlsx", "")
+                    try:
+                        file_date = datetime.strptime(date_str, "%Y%m")
+                        month_key = file_date.strftime("%Y年%m月")
+                    except:
+                        month_key = filename.replace(".xlsx", "")
+
+                # 添加月份标识
+                df['月份'] = month_key
+                df['日期'] = datetime.now()  # 使用当前日期作为占位符
+
+                # 存储数据
+                dashboard.monthly_data[month_key] = {
+                    'data': df,
+                    'date': datetime.now(),
+                    'file_path': f"上传文件: {filename}"
+                }
+
+                st.sidebar.success(f"已加载: {month_key}")
+
+            except Exception as e:
+                st.sidebar.error(f"处理文件 {uploaded_file.name} 时出错: {str(e)}")
+
+    # 月份选择器
+    available_months = dashboard.get_available_months()
     if available_months:
         selected_month = st.sidebar.selectbox(
             "选择查看月份",
@@ -1188,22 +1304,23 @@ def main():
         )
 
         # 获取上月数据
-        previous_month = st.session_state.dashboard.get_previous_month(selected_month)
+        previous_month = dashboard.get_previous_month(selected_month)
         previous_month_data = None
         if previous_month:
-            previous_month_data = st.session_state.dashboard.get_month_data(previous_month)
+            previous_month_data = dashboard.get_month_data(previous_month)
 
         # 显示数据概览
-        st.session_state.dashboard.create_overview_dashboard(selected_month)
+        dashboard.create_overview_dashboard(selected_month)
 
         # 添加详细数据选项卡
         st.markdown("---")
         st.header("📋 详细数据查看")
 
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["原始数据", "绩效排名", "前100vs后100分析", "区域详情", "区域分析报告"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+            ["原始数据", "绩效排名", "前100vs后100分析", "区域详情", "区域分析报告", "会员价值贡献"])
 
         with tab1:
-            df = st.session_state.dashboard.get_month_data(selected_month)
+            df = dashboard.get_month_data(selected_month)
             if not df.empty:
                 st.dataframe(df, use_container_width=True)
 
@@ -1219,7 +1336,7 @@ def main():
                 st.warning("没有数据可显示")
 
         with tab2:
-            df = st.session_state.dashboard.get_month_data(selected_month)
+            df = dashboard.get_month_data(selected_month)
             if not df.empty and '最终收益值' in df.columns:
                 # 添加排名选项 - 使用3列布局
                 col1, col2, col3 = st.columns(3)
@@ -1267,15 +1384,15 @@ def main():
                 st.warning("没有排名数据可显示")
 
         with tab3:
-            df = st.session_state.dashboard.get_month_data(selected_month)
+            df = dashboard.get_month_data(selected_month)
             if not df.empty and '最终收益值' in df.columns:
                 # 创建前100名与后100名对比分析
-                st.session_state.dashboard.create_performance_comparison(df, selected_month)
+                dashboard.create_performance_comparison(df, selected_month)
             else:
                 st.warning("没有足够的数据进行对比分析")
 
         with tab4:
-            df = st.session_state.dashboard.get_month_data(selected_month)
+            df = dashboard.get_month_data(selected_month)
             if not df.empty and '大区' in df.columns:
                 # 选择要查看的大区
                 regions = df['大区'].unique()
@@ -1311,92 +1428,51 @@ def main():
                 st.warning("没有区域数据可显示")
 
         with tab5:
-            df = st.session_state.dashboard.get_month_data(selected_month)
+            df = dashboard.get_month_data(selected_month)
             if not df.empty and '大区' in df.columns:
                 # 选择要分析的大区
                 regions = df['大区'].unique()
                 selected_region = st.selectbox("选择要分析的大区", options=regions, key="analysis_region")
 
                 # 创建区域优势与劣势报告
-                st.session_state.dashboard.create_region_strengths_weaknesses(df, selected_region, previous_month_data)
+                dashboard.create_region_strengths_weaknesses(df, selected_region, previous_month_data)
             else:
                 st.warning("没有区域数据可显示")
 
+        with tab6:
+            # 创建会员价值贡献分析
+            dashboard.create_member_value_analysis(selected_month)
+
     else:
-        # 显示欢迎界面和使用说明
-        st.info("👈 请先选择数据源并加载数据")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("""
-            ## 📁 数据源说明
-            
-            ### 1. GitHub仓库模式
-            - 自动读取与`app.py`在同一目录下的Excel文件
-            - 文件命名格式: `利润模型评估报告_原始收益值_YYYYMM.xlsx`
-            - 支持多个月份文件同时加载
-            - 自动识别文件名中的日期信息
-            
-            ### 2. 文件上传模式
-            - 通过浏览器上传Excel文件
-            - 支持多文件上传
-            - 临时存储，刷新页面后需要重新上传
-            
-            ### 文件格式要求
-            - Excel格式 (.xlsx)
-            - 包含必要的列名
-            """)
-        
-        with col2:
-            st.markdown("""
-            ## 📊 分析功能
-            
-            ### 核心分析模块
-            1. **绩效概览** - 关键指标汇总
-            2. **收益分布** - 收益分段分析
-            3. **顾问类型分析** - 各类型顾问表现对比
-            4. **大区绩效** - 区域对比分析
-            5. **趋势分析** - 多月份趋势对比
-            
-            ### 详细分析
-            1. **绩效排名** - 自定义排名查看
-            2. **前100vs后100** - 优劣势对比分析
-            3. **区域详情** - 具体区域数据查看
-            4. **区域分析报告** - 区域优劣势详细报告
-            
-            ### 数据导出
-            - CSV格式数据导出
-            - 筛选后数据下载
-            """)
-        # 显示文件格式要求
-        with st.expander("📋 详细文件格式要求", expanded=False):
-            st.markdown("""
-            ### 必需的数据列
-            
-            请确保Excel文件包含以下列（或类似列名）：
-            
-            | 列名 | 说明 | 示例 |
-            |------|------|------|
-            | 时间/月份 | 数据所属时间 | 2024-01 |
-            | 大区 | 所属大区 | 华北区 |
-            | 区域 | 所属区域 | 北京 |
-            | 门店名称 | 所属门店 | 门店A |
-            | 顾问名称 | 顾问姓名 | 张三 |
-            | 顾问编制 | 顾问类型 | 全职/兼职 |
-            | 最终收益值 | 最终收益金额 | 50000 |
-            | 销售利润 | 销售利润金额 | 45000 |
-            | 新客贡献 | 新客贡献金额 | 5000 |
-            | 会员价值贡献 | 会员价值贡献 | 3000 |
-            | 试饮获客贡献 | 试饮获客贡献 | 2000 |
-            | A+B内码贡献 | 内码贡献金额 | 1000 |
-            | 总收益 | 总收益金额 | 56000 |
-            
-            ### 文件命名规范
-            推荐使用标准命名格式，便于系统自动识别：
+        st.info("👈 请确保数据文件夹中有Excel文件，或通过侧边栏上传文件")
+
+        # 显示使用说明
+        st.markdown("""
+        ## 使用说明
+
+        1. **数据加载**: 应用会自动从指定文件夹加载Excel文件
+        2. **文件格式**: 文件命名格式应为: `利润模型评估报告_原始收益值_YYYYMM.xlsx`
+        3. **数据路径**: 当前数据路径: `/Users/Yvonne/Desktop/伊利/人效分析/营养顾问分析报告`
+        4. **备用上传**: 如果数据文件夹为空，可通过侧边栏上传Excel文件
+
+        ## 文件格式要求
+
+        请确保Excel文件包含以下列（或类似列名）：
+        - 时间/月份
+        - 大区
+        - 区域
+        - 门店名称
+        - 顾问名称
+        - 顾问编制
+        - 最终收益值
+        - 销售利润
+        - 新客贡献
+        - 会员价值贡献
+        - 试饮获客贡献
+        - A+B内码贡献
+        - 总收益
         """)
 
 
 if __name__ == "__main__":
     main()
-        
