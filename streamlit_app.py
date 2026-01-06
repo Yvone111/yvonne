@@ -145,6 +145,236 @@ class NutritionAdviserDashboard:
             return months[current_index + 1]  # 因为是倒序排列
         return None
 
+    def create_member_value_analysis(self, selected_month):
+        """创建会员价值贡献分析"""
+        st.header(f"📈 会员价值贡献分析 - {selected_month}")
+        
+        # 获取当月数据
+        current_month_data = self.get_month_data(selected_month)
+        if current_month_data.empty or '会员价值贡献' not in current_month_data.columns or '大区' not in current_month_data.columns:
+            st.warning("当月数据中没有会员价值贡献或大区信息")
+            return
+        
+        # 功能1: 各区域会员价值贡献总量柱状图
+        st.subheader("1. 各区域会员价值贡献总量")
+        
+        # 计算各区域会员价值贡献总量
+        region_member_value = current_month_data.groupby('大区')['会员价值贡献'].sum().reset_index()
+        region_member_value = region_member_value.sort_values('会员价值贡献', ascending=True)
+        
+        # 创建柱状图
+        fig1 = px.bar(
+            region_member_value,
+            y='大区',
+            x='会员价值贡献',
+            orientation='h',
+            title=f"{selected_month} 各区域会员价值贡献总量",
+            color='会员价值贡献',
+            color_continuous_scale='Viridis',
+            text_auto='.0f'
+        )
+        fig1.update_layout(
+            yaxis_title="大区",
+            xaxis_title="会员价值贡献总量（元）",
+            height=500
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+        
+        # 显示详细数据
+        st.subheader("各区域会员价值贡献详细数据")
+        
+        # 计算各区域的统计指标
+        region_stats = current_month_data.groupby('大区').agg({
+            '会员价值贡献': ['sum', 'mean', 'count']
+        }).round(0)
+        
+        region_stats.columns = ['贡献总量', '人均贡献', '顾问人数']
+        region_stats = region_stats.reset_index()
+        region_stats = region_stats.sort_values('贡献总量', ascending=False)
+        
+        # 添加排名
+        region_stats['排名'] = range(1, len(region_stats) + 1)
+        region_stats = region_stats[['排名', '大区', '贡献总量', '人均贡献', '顾问人数']]
+        
+        # 格式化显示
+        region_stats['贡献总量'] = region_stats['贡献总量'].apply(lambda x: f"¥{x:,.0f}")
+        region_stats['人均贡献'] = region_stats['人均贡献'].apply(lambda x: f"¥{x:,.0f}")
+        
+        st.dataframe(region_stats, use_container_width=True)
+        
+        # 功能2: 当月与上月各区域会员价值贡献对比
+        st.subheader("2. 当月与上月各区域会员价值贡献对比")
+        
+        # 获取上月数据
+        previous_month = self.get_previous_month(selected_month)
+        
+        if previous_month:
+            previous_month_data = self.get_month_data(previous_month)
+            
+            if not previous_month_data.empty and '会员价值贡献' in previous_month_data.columns and '大区' in previous_month_data.columns:
+                # 计算当月各区域会员价值贡献总量
+                current_summary = current_month_data.groupby('大区')['会员价值贡献'].sum().reset_index()
+                current_summary.columns = ['大区', '当月贡献']
+                
+                # 计算上月各区域会员价值贡献总量
+                previous_summary = previous_month_data.groupby('大区')['会员价值贡献'].sum().reset_index()
+                previous_summary.columns = ['大区', '上月贡献']
+                
+                # 合并数据
+                comparison = pd.merge(current_summary, previous_summary, on='大区', how='outer')
+                comparison = comparison.fillna(0)
+                
+                # 计算变化量和变化百分比
+                comparison['变化量'] = comparison['当月贡献'] - comparison['上月贡献']
+                comparison['变化百分比'] = (comparison['变化量'] / comparison['上月贡献'] * 100).round(1)
+                comparison = comparison.fillna(0)
+                
+                # 创建变化量柱状图
+                fig2 = px.bar(
+                    comparison,
+                    x='大区',
+                    y='变化量',
+                    title=f"{selected_month} 与 {previous_month} 各区域会员价值贡献变化量",
+                    color='变化量',
+                    color_continuous_scale='RdYlGn',
+                    text_auto='+.0f'
+                )
+                fig2.update_layout(
+                    xaxis_title="大区",
+                    yaxis_title="变化量（元）",
+                    height=400
+                )
+                fig2.update_traces(texttemplate='%{y:+,.0f}元')
+                st.plotly_chart(fig2, use_container_width=True)
+                
+                # 创建变化百分比柱状图
+                fig3 = px.bar(
+                    comparison,
+                    x='大区',
+                    y='变化百分比',
+                    title=f"{selected_month} 与 {previous_month} 各区域会员价值贡献变化百分比",
+                    color='变化百分比',
+                    color_continuous_scale='RdYlGn',
+                    text_auto='+.1f'
+                )
+                fig3.update_layout(
+                    xaxis_title="大区",
+                    yaxis_title="变化百分比 (%)",
+                    height=400
+                )
+                fig3.update_traces(texttemplate='%{y:+.1f}%')
+                st.plotly_chart(fig3, use_container_width=True)
+                
+                # 创建对比折线图
+                st.subheader("各区域会员价值贡献趋势对比")
+                
+                # 准备数据
+                trend_data = []
+                for _, row in comparison.iterrows():
+                    trend_data.append({
+                        '大区': row['大区'],
+                        '贡献值': row['上月贡献'],
+                        '月份': previous_month
+                    })
+                    trend_data.append({
+                        '大区': row['大区'],
+                        '贡献值': row['当月贡献'],
+                        '月份': selected_month
+                    })
+                
+                trend_df = pd.DataFrame(trend_data)
+                
+                # 创建折线图
+                fig4 = px.line(
+                    trend_df,
+                    x='月份',
+                    y='贡献值',
+                    color='大区',
+                    markers=True,
+                    title=f"各区域会员价值贡献趋势对比 ({previous_month} → {selected_month})",
+                    line_shape='spline'
+                )
+                fig4.update_layout(
+                    xaxis_title="月份",
+                    yaxis_title="会员价值贡献（元）",
+                    height=500,
+                    legend_title="大区"
+                )
+                st.plotly_chart(fig4, use_container_width=True)
+                
+                # 显示详细对比数据
+                st.subheader("详细对比数据")
+                
+                # 格式化显示
+                display_comparison = comparison.copy()
+                display_comparison['当月贡献'] = display_comparison['当月贡献'].apply(lambda x: f"¥{x:,.0f}")
+                display_comparison['上月贡献'] = display_comparison['上月贡献'].apply(lambda x: f"¥{x:,.0f}")
+                display_comparison['变化量'] = display_comparison['变化量'].apply(lambda x: f"¥{x:+,.0f}")
+                display_comparison['变化百分比'] = display_comparison['变化百分比'].apply(lambda x: f"{x:+.1f}%")
+                
+                # 添加颜色标记函数
+                def color_style(val):
+                    if isinstance(val, str):
+                        if '¥+' in val or '¥0' in val:
+                            return 'color: green; font-weight: bold'
+                        elif '¥-' in val:
+                            return 'color: red; font-weight: bold'
+                    if isinstance(val, str) and '%' in val:
+                        try:
+                            num = float(val.replace('%', '').replace('+', ''))
+                            if num > 0:
+                                return 'color: green; font-weight: bold'
+                            elif num < 0:
+                                return 'color: red; font-weight: bold'
+                        except:
+                            pass
+                    return ''
+                
+                # 应用样式
+                styled_df = display_comparison.style.applymap(color_style, subset=['变化量', '变化百分比'])
+                st.dataframe(styled_df, use_container_width=True)
+                
+                # 显示关键发现
+                st.subheader("💡 关键发现")
+                
+                # 找出增长最快和下降最多的区域
+                if not comparison.empty:
+                    # 增长最快的区域
+                    top_growth = comparison.nlargest(1, '变化百分比')
+                    if not top_growth.empty:
+                        top_region = top_growth.iloc[0]['大区']
+                        top_growth_pct = top_growth.iloc[0]['变化百分比']
+                        top_growth_val = top_growth.iloc[0]['变化量']
+                        
+                        st.success(f"**增长最快**: {top_region} 区域会员价值贡献增长 {top_growth_pct:.1f}% (¥{top_growth_val:+,.0f})")
+                    
+                    # 下降最多的区域
+                    bottom_growth = comparison.nsmallest(1, '变化百分比')
+                    if not bottom_growth.empty and bottom_growth.iloc[0]['变化百分比'] < 0:
+                        bottom_region = bottom_growth.iloc[0]['大区']
+                        bottom_growth_pct = bottom_growth.iloc[0]['变化百分比']
+                        bottom_growth_val = bottom_growth.iloc[0]['变化量']
+                        
+                        st.error(f"**需关注**: {bottom_region} 区域会员价值贡献下降 {abs(bottom_growth_pct):.1f}% (¥{bottom_growth_val:+,.0f})")
+                    
+                    # 计算总体变化
+                    total_current = current_summary['当月贡献'].sum()
+                    total_previous = previous_summary['上月贡献'].sum()
+                    total_change = total_current - total_previous
+                    total_change_pct = (total_change / total_previous * 100) if total_previous != 0 else 0
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("当月总贡献", f"¥{total_current:,.0f}")
+                    with col2:
+                        st.metric("上月总贡献", f"¥{total_previous:,.0f}")
+                    with col3:
+                        st.metric("总体变化", f"{total_change_pct:+.1f}%", f"¥{total_change:+,.0f}")
+            else:
+                st.warning(f"上月({previous_month})数据中没有会员价值贡献或大区信息")
+        else:
+            st.info("没有上月数据可用于对比分析")
+
     def create_overview_dashboard(self, selected_month):
         """创建概览仪表板"""
         st.header(f"📊 营养顾问绩效评估概览 - {selected_month}")
@@ -1084,7 +1314,7 @@ def main():
         st.markdown("---")
         st.header("📋 详细数据查看")
 
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["原始数据", "绩效排名", "前100vs后100分析", "区域详情", "区域分析报告"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["原始数据", "绩效排名", "前100vs后100分析", "区域详情", "区域分析报告", "会员价值贡献"])
 
         with tab1:
             df = dashboard.get_month_data(selected_month)
@@ -1158,7 +1388,7 @@ def main():
             else:
                 st.warning("没有足够的数据进行对比分析")
 
-        with tab3:
+        with tab4:
             df = dashboard.get_month_data(selected_month)
             if not df.empty and '大区' in df.columns:
                 # 选择要查看的大区
@@ -1194,7 +1424,7 @@ def main():
             else:
                 st.warning("没有区域数据可显示")
 
-        with tab4:
+        with tab5:
             df = dashboard.get_month_data(selected_month)
             if not df.empty and '大区' in df.columns:
                 # 选择要分析的大区
@@ -1205,6 +1435,10 @@ def main():
                 dashboard.create_region_strengths_weaknesses(df, selected_region, previous_month_data)
             else:
                 st.warning("没有区域数据可显示")
+
+        with tab6:
+            # 创建会员价值贡献分析
+            dashboard.create_member_value_analysis(selected_month)
 
     else:
         st.info("👈 请确保数据文件夹中有Excel文件，或通过侧边栏上传文件")
