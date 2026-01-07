@@ -647,11 +647,11 @@ class NutritionAdviserDashboard:
                 st.metric("顾问人数", f"{worst_region['顾问人数']}人")
 
         # 显示详细数据表
-        st.subheader("各区域详细数据")
-        display_data = region_stats[['大区', '顾问人数', '平均收益']]
-        display_data.columns = ['大区', '顾问人数', '平均收益(元)']
-        display_data = display_data.sort_values('平均收益(元)', ascending=False)
-        st.dataframe(display_data, use_container_width=True)
+        # st.subheader("各区域详细数据")
+        # display_data = region_stats[['大区', '顾问人数', '平均收益']]
+        # display_data.columns = ['大区', '顾问人数', '平均收益(元)']
+        # display_data = display_data.sort_values('平均收益(元)', ascending=False)
+        # st.dataframe(display_data, use_container_width=True)
 
     def create_trend_analysis_chart(self, selected_month):
         """创建趋势分析图表"""
