@@ -440,7 +440,7 @@ class NutritionAdviserDashboard:
 
     def create_overview_dashboard(self, selected_month):
         """创建概览仪表板"""
-        st.header(f"📊 营养顾问绩效评估概览 - {selected_month}")
+        st.header(f"📊📊 营养顾问绩效评估概览 - {selected_month}")
 
         df = self.get_month_data(selected_month)
         if df.empty:
@@ -457,9 +457,9 @@ class NutritionAdviserDashboard:
                 data_source = "上传文件"
             else:
                 data_source = "未知"
-            st.caption(f"📁 数据来源: {data_source}")
+            st.caption(f"📁📁 数据来源: {data_source}")
 
-        # 关键指标卡片
+        # 关键指标卡片 - 将"收益"改为"人效价值"
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
@@ -468,11 +468,11 @@ class NutritionAdviserDashboard:
 
         with col2:
             avg_profit = df['最终收益值'].mean() if '最终收益值' in df.columns else 0
-            st.metric("平均收益", f"¥{avg_profit:,.0f}")
+            st.metric("平均人效价值", f"¥{avg_profit:,.0f}")  # 修改这里
 
         with col3:
             total_profit = df['最终收益值'].sum() if '最终收益值' in df.columns else 0
-            st.metric("总收益", f"¥{total_profit:,.0f}")
+            st.metric("总人效价值", f"¥{total_profit:,.0f}")  # 修改这里
 
         with col4:
             # 计算高绩效顾问比例（收益前20%）
@@ -484,7 +484,7 @@ class NutritionAdviserDashboard:
             else:
                 st.metric("高绩效顾问比例", "0%")
 
-        # 第一行：收益分布和顾问类型分析
+        # 第一行：人效价值分布和顾问类型分析
         col1, col2 = st.columns(2)
 
         with col1:
@@ -506,27 +506,27 @@ class NutritionAdviserDashboard:
                 st.info("需要多个月份数据才能显示趋势分析")
 
     def create_profit_distribution_chart(self, df, month):
-        """创建收益分布图表"""
-        st.subheader("📈 收益分布情况")
+        """创建人效价值分布图表"""  # 修改标题注释
+        st.subheader("📈📈 人效价值分布情况")  # 修改这里
 
         if '最终收益值' not in df.columns or df.empty:
-            st.warning("没有收益数据可显示")
+            st.warning("没有人效价值数据可显示")  # 修改这里
             return
 
-        # 收益分段
+        # 人效价值分段  # 修改这里
         profit_bins = [-float('inf'), 0, 10000, 50000, 100000, 200000, float('inf')]
-        profit_labels = ['亏损(<0)', '低收益(0-1万)', '中低收益(1-5万)',
-                         '中收益(5-10万)', '中高收益(10-20万)', '高收益(>20万)']
+        profit_labels = ['亏损(<0)', '低人效价值(0-1万)', '中低人效价值(1-5万)',  # 修改这里
+                         '中人效价值(5-10万)', '中高人效价值(10-20万)', '高人效价值(>20万)']  # 修改这里
 
         df_copy = df.copy()
-        df_copy['收益分段'] = pd.cut(df_copy['最终收益值'], bins=profit_bins, labels=profit_labels)
-        distribution = df_copy['收益分段'].value_counts().reindex(profit_labels)
+        df_copy['人效价值分段'] = pd.cut(df_copy['最终收益值'], bins=profit_bins, labels=profit_labels)  # 修改这里
+        distribution = df_copy['人效价值分段'].value_counts().reindex(profit_labels)  # 修改这里
 
         # 创建饼图
         fig = px.pie(
             values=distribution.values,
             names=distribution.index,
-            title=f"{month} 收益分布",
+            title=f"{month} 人效价值分布",  # 修改这里
             color_discrete_sequence=px.colors.sequential.RdBu
         )
         fig.update_traces(textposition='inside', textinfo='percent+label')
@@ -537,15 +537,15 @@ class NutritionAdviserDashboard:
         # 显示统计信息
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("最高收益", f"¥{df['最终收益值'].max():,.0f}")
+            st.metric("最高人效价值", f"¥{df['最终收益值'].max():,.0f}")  # 修改这里
         with col2:
             st.metric("中位数", f"¥{df['最终收益值'].median():,.0f}")
         with col3:
-            st.metric("最低收益", f"¥{df['最终收益值'].min():,.0f}")
+            st.metric("最低人效价值", f"¥{df['最终收益值'].min():,.0f}")  # 修改这里
 
     def create_adviser_type_chart(self, df, month):
-        """创建顾问类型分析图表 - 简化版本，只显示平均收益图表"""
-        st.subheader("👥 各类型顾问表现")
+        """创建顾问类型分析图表 - 简化版本，只显示平均人效价值图表"""  # 修改标题注释
+        st.subheader("👥👥 各类型顾问表现")
 
         if '顾问编制' not in df.columns or '最终收益值' not in df.columns:
             st.warning("缺少必要的数据列")
@@ -557,22 +557,22 @@ class NutritionAdviserDashboard:
         }).round(0)
 
         # 简化列名
-        type_stats.columns = ['人数', '平均收益', '中位收益', '标准差']
+        type_stats.columns = ['人数', '平均人效价值', '中位人效价值', '标准差']  # 修改这里
         type_stats = type_stats.reset_index()
 
         # 创建柱状图
         fig = px.bar(
             type_stats,
             x='顾问编制',
-            y='平均收益',
-            title=f"{month} 各类型顾问平均收益",
-            color='平均收益',
+            y='平均人效价值',  # 修改这里
+            title=f"{month} 各类型顾问平均人效价值",  # 修改这里
+            color='平均人效价值',  # 修改这里
             color_continuous_scale='Viridis',
             text_auto='.0f'
         )
         fig.update_layout(
             xaxis_title="顾问类型",
-            yaxis_title="平均收益（元）",
+            yaxis_title="平均人效价值（元）",  # 修改这里
             height=400
         )
 
@@ -580,14 +580,14 @@ class NutritionAdviserDashboard:
 
         # 显示简单统计表
         st.subheader("各类型顾问基本统计")
-        display_stats = type_stats[['顾问编制', '人数', '平均收益']]
-        display_stats.columns = ['顾问类型', '人数', '平均收益(元)']
-        display_stats['平均收益(元)'] = display_stats['平均收益(元)'].apply(lambda x: f"¥{x:,.0f}")
+        display_stats = type_stats[['顾问编制', '人数', '平均人效价值']]  # 修改这里
+        display_stats.columns = ['顾问类型', '人数', '平均人效价值(元)']  # 修改这里
+        display_stats['平均人效价值(元)'] = display_stats['平均人效价值(元)'].apply(lambda x: f"¥{x:,.0f}")  # 修改这里
         st.dataframe(display_stats, use_container_width=True)
 
     def create_region_analysis_chart(self, df, month):
         """创建大区分析图表 - 简化版本"""
-        st.subheader("🌍 大区绩效分析")
+        st.subheader("🌍🌍 大区绩效分析")
 
         if '大区' not in df.columns or '最终收益值' not in df.columns:
             st.warning("缺少大区数据")
@@ -598,30 +598,30 @@ class NutritionAdviserDashboard:
             '最终收益值': ['mean', 'count']
         }).round(0)
 
-        region_stats.columns = ['平均收益', '顾问人数']
+        region_stats.columns = ['平均人效价值', '顾问人数']  # 修改这里
         region_stats = region_stats.reset_index()
 
         if len(region_stats) == 0:
             st.warning("没有大区数据可显示")
             return
 
-        # 按平均收益排序
-        region_stats = region_stats.sort_values('平均收益', ascending=True)
+        # 按平均人效价值排序  # 修改这里
+        region_stats = region_stats.sort_values('平均人效价值', ascending=True)  # 修改这里
 
         # 创建水平条形图 - 更简洁
         fig = px.bar(
             region_stats,
             y='大区',
-            x='平均收益',
+            x='平均人效价值',  # 修改这里
             orientation='h',
             title=f"{month} 各区域绩效对比",
-            color='平均收益',
+            color='平均人效价值',  # 修改这里
             color_continuous_scale='RdYlGn',
             text_auto='.0f'
         )
         fig.update_layout(
             yaxis_title="大区",
-            xaxis_title="平均收益（元）",
+            xaxis_title="平均人效价值（元）",  # 修改这里
             height=400,
             showlegend=False
         )
@@ -632,30 +632,30 @@ class NutritionAdviserDashboard:
         st.subheader("区域表现分析")
 
         if len(region_stats) > 1:
-            best_region = region_stats.loc[region_stats['平均收益'].idxmax()]
-            worst_region = region_stats.loc[region_stats['平均收益'].idxmin()]
+            best_region = region_stats.loc[region_stats['平均人效价值'].idxmax()]  # 修改这里
+            worst_region = region_stats.loc[region_stats['平均人效价值'].idxmin()]  # 修改这里
 
             col1, col2 = st.columns(2)
             with col1:
-                st.success(f"🏆 最佳表现: {best_region['大区']}")
-                st.metric("平均收益", f"¥{best_region['平均收益']:,.0f}")
+                st.success(f"🏆🏆 最佳表现: {best_region['大区']}")
+                st.metric("平均人效价值", f"¥{best_region['平均人效价值']:,.0f}")  # 修改这里
                 st.metric("顾问人数", f"{best_region['顾问人数']}人")
 
             with col2:
-                st.error(f"📉 需改进: {worst_region['大区']}")
-                st.metric("平均收益", f"¥{worst_region['平均收益']:,.0f}")
+                st.error(f"📉📉 需改进: {worst_region['大区']}")
+                st.metric("平均人效价值", f"¥{worst_region['平均人效价值']:,.0f}")  # 修改这里
                 st.metric("顾问人数", f"{worst_region['顾问人数']}人")
 
         # 显示详细数据表
-        # st.subheader("各区域详细数据")
-        # display_data = region_stats[['大区', '顾问人数', '平均收益']]
-        # display_data.columns = ['大区', '顾问人数', '平均收益(元)']
-        # display_data = display_data.sort_values('平均收益(元)', ascending=False)
-        # st.dataframe(display_data, use_container_width=True)
+        st.subheader("各区域详细数据")
+        display_data = region_stats[['大区', '顾问人数', '平均人效价值']]  # 修改这里
+        display_data.columns = ['大区', '顾问人数', '平均人效价值(元)']  # 修改这里
+        display_data = display_data.sort_values('平均人效价值(元)', ascending=False)  # 修改这里
+        st.dataframe(display_data, use_container_width=True)
 
     def create_trend_analysis_chart(self, selected_month):
         """创建趋势分析图表"""
-        st.subheader("📅 多月份趋势分析")
+        st.subheader("📅📅 多月份趋势分析")
 
         if len(self.monthly_data) < 2:
             st.info("需要至少两个月份的数据才能进行趋势分析")
@@ -666,16 +666,16 @@ class NutritionAdviserDashboard:
         for month, data_info in self.monthly_data.items():
             df = data_info['data']
             if '最终收益值' in df.columns and '顾问编制' in df.columns:
-                # 总体平均收益
+                # 总体平均人效价值  # 修改这里
                 overall_avg = df['最终收益值'].mean()
 
-                # 各类型顾问平均收益
+                # 各类型顾问平均人效价值  # 修改这里
                 type_avgs = df.groupby('顾问编制')['最终收益值'].mean().to_dict()
 
                 trend_data.append({
                     '月份': month,
                     '日期': data_info['date'],
-                    '总体平均收益': overall_avg,
+                    '总体平均人效价值': overall_avg,  # 修改这里
                     **type_avgs
                 })
 
@@ -692,14 +692,14 @@ class NutritionAdviserDashboard:
         # 添加总体平均线
         fig.add_trace(go.Scatter(
             x=trend_df['月份'],
-            y=trend_df['总体平均收益'],
+            y=trend_df['总体平均人效价值'],  # 修改这里
             mode='lines+markers',
             name='总体平均',
             line=dict(width=4)
         ))
 
         # 添加各类型顾问趋势线
-        adviser_types = [col for col in trend_df.columns if col not in ['月份', '日期', '总体平均收益']]
+        adviser_types = [col for col in trend_df.columns if col not in ['月份', '日期', '总体平均人效价值']]  # 修改这里
         colors = px.colors.qualitative.Set2
 
         for i, adviser_type in enumerate(adviser_types):
@@ -715,9 +715,9 @@ class NutritionAdviserDashboard:
                 ))
 
         fig.update_layout(
-            title="各类型顾问收益趋势",
+            title="各类型顾问人效价值趋势",  # 修改这里
             xaxis_title="月份",
-            yaxis_title="平均收益（元）",
+            yaxis_title="平均人效价值（元）",  # 修改这里
             height=400,
             showlegend=True
         )
@@ -730,14 +730,14 @@ class NutritionAdviserDashboard:
             latest = trend_df.iloc[-1]
             previous = trend_df.iloc[-2]
 
-            change = latest['总体平均收益'] - previous['总体平均收益']
-            change_percent = (change / previous['总体平均收益']) * 100
+            change = latest['总体平均人效价值'] - previous['总体平均人效价值']  # 修改这里
+            change_percent = (change / previous['总体平均人效价值']) * 100  # 修改这里
 
             col1, col2 = st.columns(2)
             with col1:
                 st.metric(
-                    "总体平均收益",
-                    f"¥{latest['总体平均收益']:,.0f}",
+                    "总体平均人效价值",  # 修改这里
+                    f"¥{latest['总体平均人效价值']:,.0f}",  # 修改这里
                     f"{change_percent:+.1f}%"
                 )
 
@@ -758,7 +758,6 @@ class NutritionAdviserDashboard:
                         best_type,
                         f"¥{best_value:+.0f}"
                     )
-
     def create_sales_profit_analysis(self, selected_month):
         """创建销售利润分布分析 - 新增选项卡"""
         st.header(f"📊 销售利润分布分析 - {selected_month}")
